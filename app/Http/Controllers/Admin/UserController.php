@@ -8,7 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
+use App\Exports\UsersExportCustom;
+use Maatwebsite\Excel\Facades\Excel; 
 
 class UserController extends Controller
 {
@@ -114,6 +115,37 @@ class UserController extends Controller
             ->with('success', 'User updated successfully.');
     }
 
+    public function export(Request $request)
+{
+    $query = User::with('profile');
+
+    // Filter by role
+    if ($request->filled('role')) {
+        $query->where('role', $request->role);
+    }
+
+    // Filter by status (active / inactive)
+    if ($request->filled('status')) {
+        if ($request->status == 'active') {
+            $query->whereNotNull('email_verified_at');
+        } elseif ($request->status == 'inactive') {
+            $query->whereNull('email_verified_at');
+        }
+    }
+
+    // Search by name or email
+    if ($request->filled('search')) {
+        $search = $request->search;
+        $query->where(function ($q) use ($search) {
+            $q->where('name', 'like', '%' . $search . '%')
+              ->orWhere('email', 'like', '%' . $search . '%');
+        });
+    }
+
+    $users = $query->get();
+
+    return Excel::download(new UsersExportCustom($users), 'users.xlsx');
+}
     public function destroy(User $user)
     {
         // Prevent deleting self
